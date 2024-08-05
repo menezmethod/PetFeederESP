@@ -3,11 +3,11 @@
 #include <BLEDevice.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
-#include <BLE2902.h>
 #include <Preferences.h>
 #include <ESP32Servo.h>
 #include <PubSubClient.h>
-#include "time.h"
+#include <ArduinoJson.h>
+#include <ctime>
 
 #define DEVICE_NAME "ESP_FEEDER"
 #define SERVICE_UUID        "00FF"
@@ -21,21 +21,16 @@
 #define SERVO_STOP 1500
 #define SERVO_MAX 2500
 
-#define MQTT_BROKER_URI "192.168.0.74"
+#define MQTT_BROKER_URI "192.168.0.221"
 #define MQTT_PORT 1883
 
-enum WiFiSetupState {
-    IDLE,
-    SCANNING,
-    WAITING_SSID,
-    WAITING_PASSWORD,
-    CONNECTING
-};
+enum WiFiSetupState { IDLE, SCANNING, WAITING_SSID, WAITING_PASSWORD, CONNECTING };
 
 WiFiSetupState setupState = IDLE;
 bool wifi_connected = false;
 bool mqtt_connected = false;
 bool time_synced = false;
+bool schedulingEnabled = true;  // Global scheduling is on by default
 
 BLEServer *pServer = NULL;
 BLECharacteristic *pCharacteristicWiFi = NULL;
@@ -48,8 +43,13 @@ String ssidReceived = "";
 String passwordReceived = "";
 
 static uint16_t serving_size = 1000;
-typedef struct { uint8_t hour, minute; } schedule_t;
-static schedule_t schedules[2] = {{8, 0}, {18, 0}};
+
+typedef struct {
+    int hour, minute;
+    bool enabled;
+} schedule_t;
+
+static schedule_t schedules[2] = {{8, 0, true}, {18, 0, true}};
 
 void setServo(uint16_t duty) {
     Serial.printf("Setting servo to %d\n", duty);
@@ -60,83 +60,49 @@ void dispense(uint16_t time) {
     Serial.printf("Dispensing for %d ms\n", time);
     digitalWrite(SERVO_POWER_PIN, HIGH);
     delay(200);  // Wait for power stabilization
-
-    Serial.println("Setting servo to MAX");
     setServo(SERVO_MAX);
     delay(time);
-
-    Serial.println("Setting servo to STOP");
     setServo(SERVO_STOP);
     delay(100);
-
     digitalWrite(SERVO_POWER_PIN, LOW);
     Serial.println("Dispense complete");
 }
 
 void saveWiFiCredentials() {
-    Serial.println("Saving WiFi credentials");
     preferences.begin("wifi_creds", false);
     preferences.putString("ssid", ssidReceived);
     preferences.putString("password", passwordReceived);
     preferences.end();
-    Serial.println("Credentials saved");
+    Serial.println("WiFi credentials saved");
 }
 
 void getWiFiCredentials() {
-    Serial.println("Retrieving WiFi credentials");
     preferences.begin("wifi_creds", true);
     ssidReceived = preferences.getString("ssid", "");
     passwordReceived = preferences.getString("password", "");
     preferences.end();
-    Serial.println("Retrieved credentials:");
-    Serial.println("SSID: " + ssidReceived);
-    Serial.println("Password: " + passwordReceived);
-}
-
-void scanNetworks() {
-    Serial.println("Scanning WiFi networks...");
-    int n = WiFi.scanNetworks();
-    String networks = "Available networks:\n";
-    for (int i = 0; i < n; ++i) {
-        networks += String(i + 1) + ": " + WiFi.SSID(i) + " (" + WiFi.RSSI(i) + "dBm)\n";
-    }
-    Serial.println(networks);
-    pCharacteristicWiFi->setValue(networks.c_str());
-    pCharacteristicWiFi->notify();
+    Serial.println("Retrieved WiFi credentials");
 }
 
 void connectToWiFi() {
     if (ssidReceived.length() > 0 && passwordReceived.length() > 0) {
-        Serial.println("Attempting to connect to WiFi");
-        Serial.printf("SSID: %s\n", ssidReceived.c_str());
-        WiFi.disconnect();  // Disconnect from any previous WiFi
+        Serial.printf("Connecting to WiFi: %s\n", ssidReceived.c_str());
         WiFi.begin(ssidReceived.c_str(), passwordReceived.c_str());
-
         int attempts = 0;
         while (WiFi.status() != WL_CONNECTED && attempts < 20) {
             delay(500);
             Serial.print(".");
             attempts++;
         }
-
         if (WiFi.status() == WL_CONNECTED) {
-            Serial.println("\nWiFi connected");
-            Serial.print("IP address: ");
-            Serial.println(WiFi.localIP());
+            Serial.printf("\nWiFi connected. IP: %s\n", WiFi.localIP().toString().c_str());
             wifi_connected = true;
-            String connectedMsg = "Connected to WiFi. IP: " + WiFi.localIP().toString();
-            pCharacteristicWiFi->setValue(connectedMsg.c_str());
-            pCharacteristicWiFi->notify();
         } else {
             Serial.println("\nFailed to connect to WiFi");
             wifi_connected = false;
-            pCharacteristicWiFi->setValue("Failed to connect to WiFi");
-            pCharacteristicWiFi->notify();
         }
     } else {
         Serial.println("No WiFi credentials stored");
-        pCharacteristicWiFi->setValue("No WiFi credentials stored");
-        pCharacteristicWiFi->notify();
     }
 }
 
@@ -149,60 +115,86 @@ void syncTime() {
         Serial.print(".");
         now = time(nullptr);
     }
-    Serial.println();
     time_synced = true;
     setenv("TZ", "EST5EDT,M3.2.0,M11.1.0", 1);
     tzset();
     struct tm timeinfo;
     if (getLocalTime(&timeinfo)) {
-        Serial.println(&timeinfo, "Time synchronized: %A, %B %d %Y %H:%M:%S");
+        Serial.printf("Time synchronized: %s", asctime(&timeinfo));
     } else {
         Serial.println("Failed to obtain time");
     }
 }
 
+void sendScheduleStatus() {
+    DynamicJsonDocument doc(256);
+    doc["enabled"] = schedulingEnabled;
+    JsonArray scheduleArray = doc.createNestedArray("schedules");
+    for (int i = 0; i < 2; i++) {
+        JsonObject scheduleObj = scheduleArray.createNestedObject();
+        scheduleObj["hour"] = schedules[i].hour;
+        scheduleObj["minute"] = schedules[i].minute;
+        scheduleObj["enabled"] = schedules[i].enabled;
+    }
+    String jsonString;
+    serializeJson(doc, jsonString);
+    mqttClient.publish("feeder/schedule_status", jsonString.c_str());
+}
+
+void parseSchedule(const String& message) {
+    DynamicJsonDocument doc(256);
+    deserializeJson(doc, message);
+
+    schedulingEnabled = doc["enabled"];
+    JsonArray scheduleArray = doc["schedules"];
+
+    for (int i = 0; i < 2 && i < scheduleArray.size(); i++) {
+        JsonObject scheduleObj = scheduleArray[i];
+        schedules[i].hour = scheduleObj["hour"];
+        schedules[i].minute = scheduleObj["minute"];
+        schedules[i].enabled = scheduleObj["enabled"];
+    }
+
+    Serial.printf("Schedule updated: %02d:%02d (%s), %02d:%02d (%s)\n",
+                  schedules[0].hour, schedules[0].minute, schedules[0].enabled ? "ON" : "OFF",
+                  schedules[1].hour, schedules[1].minute, schedules[1].enabled ? "ON" : "OFF");
+    Serial.printf("Global scheduling: %s\n", schedulingEnabled ? "ON" : "OFF");
+}
+
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
     String message = String((char*)payload).substring(0, length);
-    Serial.println("Message arrived [" + String(topic) + "] " + message);
+    Serial.printf("Message arrived [%s] %s\n", topic, message.c_str());
 
     if (strcmp(topic, "feeder/feed") == 0) {
-        Serial.println("Dispensing food via MQTT command");
         dispense(serving_size);
     } else if (strcmp(topic, "feeder/serving_size") == 0) {
         serving_size = message.toInt();
         Serial.printf("Serving size updated to %d ms\n", serving_size);
     } else if (strcmp(topic, "feeder/schedule") == 0) {
-        int hour1, min1, hour2, min2;
-        if (sscanf(message.c_str(), "%d:%d,%d:%d", &hour1, &min1, &hour2, &min2) == 4) {
-            schedules[0] = {(uint8_t)hour1, (uint8_t)min1};
-            schedules[1] = {(uint8_t)hour2, (uint8_t)min2};
-            Serial.printf("Schedule updated: %02d:%02d, %02d:%02d\n",
-                          schedules[0].hour, schedules[0].minute,
-                          schedules[1].hour, schedules[1].minute);
-        } else {
-            Serial.println("Invalid schedule format. Use HH:MM,HH:MM");
-        }
+        parseSchedule(message);
+        sendScheduleStatus();
+    } else if (strcmp(topic, "feeder/get_schedule") == 0) {
+        sendScheduleStatus();
+    } else if (strcmp(topic, "feeder/scheduling_enable") == 0) {
+        schedulingEnabled = (message == "1" || message.equalsIgnoreCase("true") || message.equalsIgnoreCase("on"));
+        Serial.printf("Global scheduling %s\n", schedulingEnabled ? "enabled" : "disabled");
+        sendScheduleStatus();
     }
 }
 
 void reconnectMQTT() {
-    int attempts = 0;
-    while (!mqttClient.connected() && wifi_connected && attempts < 3) {
+    while (!mqttClient.connected() && wifi_connected) {
         Serial.print("Attempting MQTT connection...");
         if (mqttClient.connect("ESP32Feeder")) {
             Serial.println("connected");
             mqtt_connected = true;
             mqttClient.subscribe("feeder/#");
+            sendScheduleStatus();
+            break;
         } else {
-            Serial.print("failed, rc=");
-            Serial.print(mqttClient.state());
-            Serial.println(" try again in 5 seconds");
+            Serial.printf("failed, rc=%d. Trying again in 5 seconds\n", mqttClient.state());
             delay(5000);
-            attempts++;
         }
-    }
-    if (!mqtt_connected) {
-        Serial.println("Failed to connect to MQTT after 3 attempts");
     }
 }
 
@@ -211,21 +203,17 @@ class MyCallbacks: public BLECharacteristicCallbacks {
         std::string value = pCharacteristic->getValue();
         if (value.length() > 0) {
             String strValue = String(value.c_str());
-            Serial.println("Received: " + strValue);
+            Serial.printf("Received via BLE: %s\n", strValue.c_str());
 
             if (strValue == "SCAN") {
                 setupState = SCANNING;
             } else if (strValue.startsWith("ssid:")) {
                 ssidReceived = strValue.substring(5);
                 setupState = WAITING_PASSWORD;
-                pCharacteristicWiFi->setValue("Received SSID. Please send password as 'pass:<your_password>'");
-                pCharacteristicWiFi->notify();
             } else if (strValue.startsWith("pass:")) {
                 passwordReceived = strValue.substring(5);
                 setupState = CONNECTING;
                 saveWiFiCredentials();
-                pCharacteristicWiFi->setValue("Credentials received. Attempting to connect...");
-                pCharacteristicWiFi->notify();
             }
         }
     }
@@ -235,16 +223,13 @@ void setupBLE() {
     BLEDevice::init(DEVICE_NAME);
     pServer = BLEDevice::createServer();
     BLEService *pService = pServer->createService(SERVICE_UUID);
-
     pCharacteristicWiFi = pService->createCharacteristic(
                             CHAR_WIFI_UUID,
                             BLECharacteristic::PROPERTY_READ |
                             BLECharacteristic::PROPERTY_WRITE |
                             BLECharacteristic::PROPERTY_NOTIFY
                           );
-
     pCharacteristicWiFi->setCallbacks(new MyCallbacks());
-
     pService->start();
     BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
     pAdvertising->addServiceUUID(SERVICE_UUID);
@@ -258,7 +243,6 @@ void setupBLE() {
 void setup() {
     Serial.begin(115200);
     while (!Serial) { delay(10); }
-
     Serial.println("ESP32 Pet Feeder starting up...");
 
     pinMode(SERVO_POWER_PIN, OUTPUT);
@@ -268,8 +252,6 @@ void setup() {
     if (!servo.attached()) {
         servo.attach(SERVO_PIN, SERVO_MIN, SERVO_MAX);
         Serial.println("Servo attached");
-    } else {
-        Serial.println("Servo was already attached");
     }
     setServo(SERVO_STOP);
 
@@ -290,10 +272,8 @@ void setup() {
 void loop() {
     switch (setupState) {
         case SCANNING:
-            scanNetworks();
+            // Implement WiFi scanning logic here if needed
             setupState = WAITING_SSID;
-            pCharacteristicWiFi->setValue("Scan complete. Please send SSID as 'ssid:<your_ssid>'");
-            pCharacteristicWiFi->notify();
             break;
         case CONNECTING:
             connectToWiFi();
@@ -315,28 +295,24 @@ void loop() {
             syncTime();
         }
 
-        static bool timePrinted = false;
         static unsigned long lastCheck = 0;
         unsigned long now = millis();
         if (now - lastCheck > 10000) {
             lastCheck = now;
             struct tm timeinfo;
             if (getLocalTime(&timeinfo)) {
-                if (!timePrinted) {
-                    Serial.printf("Current time: %02d:%02d:%02d\n", timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
-                    timePrinted = true;
-                }
-                for (int i = 0; i < 2; i++) {
-                    if (timeinfo.tm_hour == schedules[i].hour &&
-                        timeinfo.tm_min == schedules[i].minute &&
-                        timeinfo.tm_sec < 10) { // Allow a 10-second window for feeding
-                        Serial.println("Scheduled feeding time");
-                        dispense(serving_size);
-                        break;
+                if (schedulingEnabled) {
+                    for (int i = 0; i < 2; i++) {
+                        if (schedules[i].enabled &&
+                            timeinfo.tm_hour == schedules[i].hour &&
+                            timeinfo.tm_min == schedules[i].minute &&
+                            timeinfo.tm_sec < 10) { // Allow a 10-second window for feeding
+                            Serial.println("Scheduled feeding time");
+                            dispense(serving_size);
+                            break;
+                        }
                     }
                 }
-            } else {
-                Serial.println("Failed to obtain time");
             }
         }
 
