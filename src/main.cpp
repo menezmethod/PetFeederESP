@@ -126,6 +126,15 @@ void syncTime() {
     }
 }
 
+void sendStatus() {
+    DynamicJsonDocument doc(256);
+    doc["schedulingEnabled"] = schedulingEnabled;
+    doc["servingSize"] = serving_size;
+    String jsonString;
+    serializeJson(doc, jsonString);
+    mqttClient.publish("feeder/status", jsonString.c_str());
+}
+
 void sendScheduleStatus() {
     DynamicJsonDocument doc(256);
     doc["enabled"] = schedulingEnabled;
@@ -170,6 +179,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     } else if (strcmp(topic, "feeder/serving_size") == 0) {
         serving_size = message.toInt();
         Serial.printf("Serving size updated to %d ms\n", serving_size);
+        sendStatus(); // Send updated status
     } else if (strcmp(topic, "feeder/schedule") == 0) {
         parseSchedule(message);
         sendScheduleStatus();
@@ -179,6 +189,9 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
         schedulingEnabled = (message == "1" || message.equalsIgnoreCase("true") || message.equalsIgnoreCase("on"));
         Serial.printf("Global scheduling %s\n", schedulingEnabled ? "enabled" : "disabled");
         sendScheduleStatus();
+        sendStatus(); // Send updated status
+    } else if (strcmp(topic, "feeder/get_status") == 0) {
+        sendStatus();
     }
 }
 
@@ -190,6 +203,7 @@ void reconnectMQTT() {
             mqtt_connected = true;
             mqttClient.subscribe("feeder/#");
             sendScheduleStatus();
+            sendStatus(); // Send status on reconnect
             break;
         } else {
             Serial.printf("failed, rc=%d. Trying again in 5 seconds\n", mqttClient.state());
