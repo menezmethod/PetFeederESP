@@ -42,7 +42,7 @@ void MQTTManager::reconnect() {
         if (_client.connect("ESP32Feeder")) {
             Serial.println("connected");
             _connected = true;
-            subscribe("feeder/#");
+            subscribe(MQTT_TOPIC_PREFIX "/#");
             Scheduler::sendScheduleStatus();
             Feeder::sendStatus();
             break;
