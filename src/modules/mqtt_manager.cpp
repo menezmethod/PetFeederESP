@@ -74,5 +74,6 @@ void MQTTManager::callback(char* topic, byte* payload, unsigned int length) {
         Feeder::sendStatus();
     } else if (strcmp(topic, TOPIC_GET_STATUS) == 0) {
         Feeder::sendStatus();
+        Scheduler::sendScheduleStatus();
     }
 }
