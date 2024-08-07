@@ -19,7 +19,7 @@
 #define LIGHT_SLEEP_DURATION 30 * 1000000  // 30 seconds in microseconds
 
 #define DEFAULT_SERVING_SIZE 1000
-#define DEFAULT_SCHEDULES {{8, 0, true}, {18, 0, true}}
+#define DEFAULT_SCHEDULES {{6, 0, true}, {17, 0, true}}
 
 #define TOPIC_FEED "feeder/feed"
 #define TOPIC_SERVING_SIZE "feeder/serving_size"
