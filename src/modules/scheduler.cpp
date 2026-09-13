@@ -14,6 +14,18 @@ void Scheduler::init() {
 }
 
 void Scheduler::update() {
+    if (!TimeUtils::isSynced()) {
+        // syncTime() in init() is bounded and can fail (no internet yet at boot).
+        // Retry periodically rather than leaving schedules permanently dead.
+        static unsigned long lastSyncAttempt = 0;
+        unsigned long now = millis();
+        if (now - lastSyncAttempt > 30000) {
+            lastSyncAttempt = now;
+            TimeUtils::syncTime();
+        }
+        return;
+    }
+
     static unsigned long lastCheck = 0;
     unsigned long now = millis();
     if (now - lastCheck > 10000) {
@@ -27,7 +39,7 @@ void Scheduler::update() {
                         timeinfo.tm_min == _schedules[i].minute &&
                         timeinfo.tm_sec < 10) {
                         Serial.println("Scheduled feeding time");
-                        Feeder::dispense();
+                        Feeder::dispense(Feeder::FeedTrigger::Scheduled);
                         break;
                     }
                 }
@@ -37,15 +49,20 @@ void Scheduler::update() {
 }
 
 void Scheduler::parseSchedule(const String &message) {
-    DynamicJsonDocument doc(256);
+    StaticJsonDocument<256> doc;
     deserializeJson(doc, message);
 
     JsonArray scheduleArray = doc["schedules"];
 
     for (int i = 0; i < 2 && i < scheduleArray.size(); i++) {
         JsonObject scheduleObj = scheduleArray[i];
-        _schedules[i].hour = scheduleObj["hour"];
-        _schedules[i].minute = scheduleObj["minute"];
+        int hour = scheduleObj["hour"];
+        int minute = scheduleObj["minute"];
+        // Clamp at this trust boundary (MQTT payload) -- an out-of-range value
+        // should fail safe (never match, never fire) rather than compare against
+        // undefined tm_hour/tm_min ranges.
+        _schedules[i].hour = constrain(hour, 0, 23);
+        _schedules[i].minute = constrain(minute, 0, 59);
         _schedules[i].enabled = scheduleObj["enabled"];
     }
 
@@ -56,7 +73,7 @@ void Scheduler::parseSchedule(const String &message) {
 }
 
 void Scheduler::sendScheduleStatus() {
-    DynamicJsonDocument doc(256);
+    StaticJsonDocument<256> doc;
     doc["enabled"] = _enabled;
     JsonArray scheduleArray = doc.createNestedArray("schedules");
     for (int i = 0; i < 2; i++) {

@@ -13,7 +13,7 @@ public:
 
     static bool isConnected();
 
-    static void publish(const char *topic, const char *payload);
+    static void publish(const char *topic, const char *payload, bool retained = false);
 
     static void subscribe(const char *topic);
 

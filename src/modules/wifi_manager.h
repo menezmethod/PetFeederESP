@@ -33,5 +33,8 @@ private:
     static String _ssid;
     static String _password;
     static bool _connected;
+    static bool _connecting;
+    static unsigned long _connectStartTime;
+    static unsigned long _lastAttempt;
     static Preferences _preferences;
 };

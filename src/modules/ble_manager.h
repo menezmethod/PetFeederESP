@@ -9,11 +9,13 @@ class BLEManager {
 public:
     static void init();
     static void update();
+    static void setAdvertisingEnabled(bool enabled);
 
 private:
     static BLEServer *pServer;
     static BLECharacteristic *pCharacteristicWiFi;
     static bool deviceConnected;
+    static bool advertisingEnabled;
 
     class ServerCallbacks: public BLEServerCallbacks {
         void onConnect(BLEServer* pServer);

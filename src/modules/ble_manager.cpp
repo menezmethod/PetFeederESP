@@ -5,6 +5,7 @@
 BLEServer *BLEManager::pServer = nullptr;
 BLECharacteristic *BLEManager::pCharacteristicWiFi = nullptr;
 bool BLEManager::deviceConnected = false;
+bool BLEManager::advertisingEnabled = true;
 
 void BLEManager::init() {
     BLEDevice::init(DEVICE_NAME);
@@ -37,6 +38,18 @@ void BLEManager::update() {
     }
 }
 
+void BLEManager::setAdvertisingEnabled(bool enabled) {
+    if (enabled == advertisingEnabled) return;
+    advertisingEnabled = enabled;
+    if (enabled) {
+        BLEDevice::startAdvertising();
+        Serial.println("BLE advertising resumed (WiFi down -- re-provisioning available)");
+    } else {
+        BLEDevice::getAdvertising()->stop();
+        Serial.println("BLE advertising stopped (WiFi provisioned)");
+    }
+}
+
 void BLEManager::ServerCallbacks::onConnect(BLEServer* pServer) {
     deviceConnected = true;
     Serial.println("BLE device connected");
@@ -44,8 +57,10 @@ void BLEManager::ServerCallbacks::onConnect(BLEServer* pServer) {
 
 void BLEManager::ServerCallbacks::onDisconnect(BLEServer* pServer) {
     deviceConnected = false;
-    BLEDevice::startAdvertising();
-    Serial.println("BLE device disconnected, advertising restarted");
+    if (advertisingEnabled) {
+        BLEDevice::startAdvertising();
+        Serial.println("BLE device disconnected, advertising restarted");
+    }
 }
 
 void BLEManager::CharacteristicCallbacks::onWrite(BLECharacteristic *pCharacteristic) {

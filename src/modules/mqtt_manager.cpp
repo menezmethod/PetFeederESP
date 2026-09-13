@@ -23,8 +23,8 @@ bool MQTTManager::isConnected() {
     return _connected;
 }
 
-void MQTTManager::publish(const char* topic, const char* payload) {
-    _client.publish(topic, payload);
+void MQTTManager::publish(const char* topic, const char* payload, bool retained) {
+    _client.publish(topic, payload, retained);
 }
 
 void MQTTManager::subscribe(const char* topic) {

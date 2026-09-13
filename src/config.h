@@ -27,9 +27,15 @@
 #define TOPIC_GET_STATUS MQTT_TOPIC_PREFIX "/requests/get_status"
 #define TOPIC_STATUS MQTT_TOPIC_PREFIX "/status/general"
 #define TOPIC_SCHEDULE_STATUS MQTT_TOPIC_PREFIX "/status/schedule"
+#define TOPIC_LAST_FED MQTT_TOPIC_PREFIX "/status/last_fed"
 
 #define MAX_CONNECTION_ATTEMPTS 20
 #define CONNECTION_DELAY_MS 500
 
 #define RECONNECT_INTERVAL_MS 5000
 #define MAX_DISPENSE_DURATION_MS 5000  // hard ceiling regardless of servingSize -- servo must never run longer than this
+
+#define WIFI_RECONNECT_INTERVAL_MS 5000
+#define NTP_SYNC_TIMEOUT_MS 15000  // bounded -- an unreachable NTP server must never hang boot forever
+#define BLE_REPROVISION_GRACE_MS 30000  // how long WiFi must stay down before BLE advertising reopens
+#define BUTTON_DEBOUNCE_MS 50

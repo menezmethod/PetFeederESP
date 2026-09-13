@@ -1,12 +1,20 @@
 #include "time_utils.h"
+#include "../config.h"
 
 bool TimeUtils::_timeSynced = false;
 
-void TimeUtils::syncTime() {
+bool TimeUtils::syncTime() {
     configTime(0, 0, "pool.ntp.org", "time.nist.gov");
     Serial.println("Waiting for time sync");
+    unsigned long start = millis();
     time_t now = time(nullptr);
     while (now < 8 * 3600 * 2) {
+        if (millis() - start > NTP_SYNC_TIMEOUT_MS) {
+            // Bounded: an unreachable NTP server (no internet, firewalled LAN)
+            // must never hang setup() forever. Caller retries later.
+            Serial.println("\nNTP sync timed out, will retry");
+            return false;
+        }
         delay(500);
         Serial.print(".");
         now = time(nullptr);
@@ -17,9 +25,16 @@ void TimeUtils::syncTime() {
     struct tm timeinfo;
     if (getLocalTime(&timeinfo)) {
         Serial.printf("Time synchronized: %s", asctime(&timeinfo));
-    } else {
-        Serial.println("Failed to obtain time");
     }
+    return true;
+}
+
+bool TimeUtils::isSynced() {
+    return _timeSynced;
+}
+
+time_t TimeUtils::getEpoch() {
+    return time(nullptr);
 }
 
 bool TimeUtils::getLocalTime(struct tm *timeinfo) {
