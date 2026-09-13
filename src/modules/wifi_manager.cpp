@@ -50,15 +50,6 @@ void WiFiManager::setCredentials(const String &ssid, const String &password) {
     saveCredentials();
 }
 
-String WiFiManager::getIP() {
-    return WiFi.localIP().toString();
-}
-
-void WiFiManager::disconnect() {
-    WiFi.disconnect(true);
-    _connected = false;
-}
-
 void WiFiManager::connectToWiFi() {
     // Non-blocking: just kicks off the attempt. WiFiEvent() below reports
     // success asynchronously; update() reports a timeout if it never comes.

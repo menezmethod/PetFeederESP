@@ -14,10 +14,6 @@ public:
 
     static void setCredentials(const String &ssid, const String &password);
 
-    static String getIP();
-
-    static void disconnect();
-
     static void connectToWiFi(); // Moved to public
     static String getSSID();
 

@@ -47,11 +47,6 @@ void MQTTManager::subscribe(const char* topic) {
     _client.subscribe(topic);
 }
 
-void MQTTManager::disconnect() {
-    _client.disconnect();
-    _connected = false;
-}
-
 void MQTTManager::reconnect() {
     // Non-blocking: a blocking retry loop here stalls the whole loop() while a
     // dispense may be in progress, so Feeder::update() never runs to stop the

@@ -17,8 +17,6 @@ public:
 
     static void subscribe(const char *topic);
 
-    static void disconnect();
-
 private:
     static void reconnect();
 
