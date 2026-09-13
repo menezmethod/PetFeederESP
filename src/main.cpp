@@ -4,11 +4,17 @@
 #include "modules/mqtt_manager.h"
 #include "modules/feeder.h"
 #include "modules/scheduler.h"
+#include <esp_ota_ops.h>
 
 void setup() {
     Serial.begin(115200);
     while (!Serial) { delay(10); }
-    Serial.println("Pet Feeder starting up...");
+    Serial.printf("Pet Feeder starting up... (firmware %s)\n", FIRMWARE_VERSION);
+
+    // Confirms this boot as good so the bootloader will not roll back to the
+    // previous OTA slot on a later unrelated reset. Cheap and harmless to
+    // call even when app rollback is not enabled in the current build.
+    esp_ota_mark_app_valid_cancel_rollback();
 
     Feeder::init();
     BLEManager::init();

@@ -33,6 +33,13 @@
 #define TOPIC_STATUS MQTT_TOPIC_PREFIX "/status/general"
 #define TOPIC_SCHEDULE_STATUS MQTT_TOPIC_PREFIX "/status/schedule"
 #define TOPIC_LAST_FED MQTT_TOPIC_PREFIX "/status/last_fed"
+#define TOPIC_OTA_CHECK MQTT_TOPIC_PREFIX "/commands/ota_check"
+#define TOPIC_OTA_STATUS MQTT_TOPIC_PREFIX "/status/ota"
+
+// Bump this with every release. Compared against OTA_VERSION_URL's
+// "version" field to decide whether an update is available.
+#define FIRMWARE_VERSION "1.1.0"
+#define OTA_VERSION_URL "https://github.com/menezmethod/PetFeederESP/releases/latest/download/version.json"
 
 #define MAX_CONNECTION_ATTEMPTS 20
 #define CONNECTION_DELAY_MS 500

@@ -19,6 +19,8 @@ public:
 
     static void sendStatus();
 
+    static bool isDispensing();
+
 private:
     static void setServo(uint16_t duty);
     static void saveServingSize();

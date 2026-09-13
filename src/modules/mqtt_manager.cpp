@@ -3,6 +3,7 @@
 #include "../mqtt_ca_cert.h"
 #include "scheduler.h"
 #include "feeder.h"
+#include "ota_manager.h"
 
 WiFiClientSecure MQTTManager::_wifiClient;
 PubSubClient MQTTManager::_client(MQTTManager::_wifiClient);
@@ -99,5 +100,7 @@ void MQTTManager::callback(char* topic, byte* payload, unsigned int length) {
     } else if (strcmp(topic, TOPIC_GET_STATUS) == 0) {
         Feeder::sendStatus();
         Scheduler::sendScheduleStatus();
+    } else if (strcmp(topic, TOPIC_OTA_CHECK) == 0) {
+        OTAManager::checkForUpdate();
     }
 }

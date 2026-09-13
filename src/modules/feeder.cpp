@@ -118,6 +118,10 @@ void Feeder::loadServingSize() {
     Serial.printf("Loaded serving size: %d ms\n", _servingSize);
 }
 
+bool Feeder::isDispensing() {
+    return _dispensing;
+}
+
 void Feeder::sendStatus() {
     StaticJsonDocument<128> doc;
     doc["servingSize"] = _servingSize;
