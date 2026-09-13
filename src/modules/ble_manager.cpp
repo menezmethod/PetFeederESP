@@ -4,8 +4,10 @@
 
 BLEServer *BLEManager::pServer = nullptr;
 BLECharacteristic *BLEManager::pCharacteristicWiFi = nullptr;
+BLECharacteristic *BLEManager::pCharacteristicWiFiScan = nullptr;
 bool BLEManager::deviceConnected = false;
 bool BLEManager::advertisingEnabled = true;
+bool BLEManager::scanPending = false;
 
 void BLEManager::init() {
     BLEDevice::init(DEVICE_NAME);
@@ -22,6 +24,17 @@ void BLEManager::init() {
     pCharacteristicWiFi->setCallbacks(new CharacteristicCallbacks());
     pCharacteristicWiFi->addDescriptor(new BLE2902());
 
+    // Read-only: populated with nearby networks shortly after connect (see
+    // update()) so the app can show a picker instead of asking the user to
+    // type an SSID blind.
+    pCharacteristicWiFiScan = pService->createCharacteristic(
+                            CHAR_WIFI_SCAN_UUID,
+                            BLECharacteristic::PROPERTY_READ |
+                            BLECharacteristic::PROPERTY_NOTIFY
+                          );
+    pCharacteristicWiFiScan->setValue("{\"networks\":[]}");
+    pCharacteristicWiFiScan->addDescriptor(new BLE2902());
+
     pService->start();
     BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
     pAdvertising->addServiceUUID(SERVICE_UUID);
@@ -33,8 +46,11 @@ void BLEManager::init() {
 }
 
 void BLEManager::update() {
-    if (deviceConnected) {
-        // Update characteristic value, if needed
+    if (deviceConnected && scanPending) {
+        scanPending = false;
+        String json = WiFiManager::scanNetworksJson();
+        pCharacteristicWiFiScan->setValue(json.c_str());
+        pCharacteristicWiFiScan->notify();
     }
 }
 
@@ -52,6 +68,7 @@ void BLEManager::setAdvertisingEnabled(bool enabled) {
 
 void BLEManager::ServerCallbacks::onConnect(BLEServer* pServer) {
     deviceConnected = true;
+    scanPending = true;  // actual scan runs from update(), not this callback
     Serial.println("BLE device connected");
 }
 

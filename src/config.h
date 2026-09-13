@@ -3,6 +3,7 @@
 #define DEVICE_NAME "ESP_FEEDER"
 #define SERVICE_UUID "00FF"
 #define CHAR_WIFI_UUID "FF01"
+#define CHAR_WIFI_SCAN_UUID "FF02"  // read-only: JSON array of nearby networks, populated on BLE connect
 
 #define SERVO_PIN 23
 #define SERVO_POWER_PIN 22

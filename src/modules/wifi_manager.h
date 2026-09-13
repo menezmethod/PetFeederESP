@@ -23,6 +23,10 @@ public:
 
     static String getPassword();
 
+    // Blocking (a few seconds) -- only ever called from a one-time BLE
+    // provisioning step, never from the main loop, so blocking here is fine.
+    static String scanNetworksJson();
+
 private:
     static void saveCredentials();
 

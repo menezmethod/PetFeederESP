@@ -14,8 +14,10 @@ public:
 private:
     static BLEServer *pServer;
     static BLECharacteristic *pCharacteristicWiFi;
+    static BLECharacteristic *pCharacteristicWiFiScan;
     static bool deviceConnected;
     static bool advertisingEnabled;
+    static bool scanPending;
 
     class ServerCallbacks: public BLEServerCallbacks {
         void onConnect(BLEServer* pServer);

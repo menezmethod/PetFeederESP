@@ -1,5 +1,8 @@
 #include "wifi_manager.h"
 #include "../config.h"
+#include <ArduinoJson.h>
+#include <algorithm>
+#include <vector>
 
 String WiFiManager::_ssid = "";
 String WiFiManager::_password = "";
@@ -114,4 +117,51 @@ String WiFiManager::getSSID() {
 
 String WiFiManager::getPassword() {
     return _password;
+}
+
+String WiFiManager::scanNetworksJson() {
+    int n = WiFi.scanNetworks();
+    Serial.printf("WiFi scan found %d networks\n", n);
+
+    struct Network { String ssid; int32_t rssi; bool secure; };
+    std::vector<Network> networks;
+    for (int i = 0; i < n; i++) {
+        String ssid = WiFi.SSID(i);
+        if (ssid.length() == 0) continue;
+
+        bool replaced = false;
+        for (auto &net : networks) {
+            if (net.ssid == ssid) {
+                if (WiFi.RSSI(i) > net.rssi) {
+                    net.rssi = WiFi.RSSI(i);
+                    net.secure = WiFi.encryptionType(i) != WIFI_AUTH_OPEN;
+                }
+                replaced = true;
+                break;
+            }
+        }
+        if (!replaced) {
+            networks.push_back({ssid, WiFi.RSSI(i), WiFi.encryptionType(i) != WIFI_AUTH_OPEN});
+        }
+    }
+    WiFi.scanDelete();
+
+    std::sort(networks.begin(), networks.end(), [](const Network &a, const Network &b) {
+        return a.rssi > b.rssi;
+    });
+
+    // Capped to fit comfortably within a negotiated BLE MTU without needing
+    // multi-packet chunking.
+    const size_t maxNetworks = 8;
+    StaticJsonDocument<512> doc;
+    JsonArray arr = doc.createNestedArray("networks");
+    for (size_t i = 0; i < networks.size() && i < maxNetworks; i++) {
+        JsonObject obj = arr.createNestedObject();
+        obj["ssid"] = networks[i].ssid;
+        obj["secure"] = networks[i].secure;
+    }
+
+    String json;
+    serializeJson(doc, json);
+    return json;
 }
