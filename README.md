@@ -72,6 +72,21 @@ mechanical side, a PR adding photos or a parts list here would help the next per
 - BLE provisioning has no pairing/bonding — anyone with physical BLE range while the feeder is advertising can read/write Wi-Fi credentials. Advertising is only active while unprovisioned or briefly after a connection drop, not continuously.
 - Wi-Fi and MQTT credentials are stored in flash (NVS) unencrypted at rest, as ESP32 flash encryption is not enabled. Acceptable for a device that isn't expected to leave your house; if that changes, enable flash encryption and secure boot.
 
+## Pending dependency upgrades
+
+Deliberately not bundled into a routine update — both are major/breaking version jumps
+that need a real flash-and-verify pass, not just a clean compile:
+
+| Library | Current → Latest | Why it's deferred |
+|---|---|---|
+| [ArduinoJson](https://arduinojson.org/) | 6.21.6 → 7.x | v7 removes `StaticJsonDocument`, used in ~12 places throughout this firmware (MQTT payloads, NVS schedule storage, OTA version parsing). Needs a full rewrite of those call sites, then verification on real hardware that nothing silently changed serialization behavior. |
+| [ESP32Servo](https://github.com/madhephaestus/ESP32Servo) | 0.9.0 → 3.x | Servo timing is exactly the kind of thing that can look fine in a compile and be wrong on the bench — `MIN`/`STOP`/`MAX` pulse widths and `attach()` behavior need to be re-verified against a physical servo, not assumed compatible across two major versions. |
+
+Do both together next time there's a board on the bench to flash and watch dispense —
+verify the servo still starts/stops cleanly at the existing `SERVO_MIN`/`SERVO_STOP`/
+`SERVO_MAX` pulse widths in `config.h`, and that scheduling/OTA still round-trip JSON
+correctly, before merging.
+
 ## Contributing
 
 Contributions are welcome — see `CONTRIBUTING.md` for what's most useful right now
