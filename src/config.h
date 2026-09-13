@@ -45,6 +45,7 @@
 #define CONNECTION_DELAY_MS 500
 
 #define RECONNECT_INTERVAL_MS 5000
+#define MIN_DISPENSE_DURATION_MS 100   // floor -- a 0ms "dispense" is a silent no-op, not a rejected request
 #define MAX_DISPENSE_DURATION_MS 5000  // hard ceiling regardless of servingSize -- servo must never run longer than this
 
 #define WIFI_RECONNECT_INTERVAL_MS 5000

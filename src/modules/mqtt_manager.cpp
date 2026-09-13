@@ -14,6 +14,10 @@ void MQTTManager::init() {
     _wifiClient.setCACert(MQTT_CA_CERT);
     _client.setServer(MQTT_BROKER_URI, MQTT_PORT);
     _client.setCallback(callback);
+    // PubSubClient's default 256-byte buffer is tight against our own JSON
+    // payloads (schedule status, OTA status) once MQTT packet overhead
+    // (topic name, fixed header) is added -- default risks silent truncation.
+    _client.setBufferSize(512);
 
     // Unique per chip -- the old fixed "ESP32Feeder" ID meant a second unit
     // (or a stale reconnect racing a fresh one) would evict the first from
@@ -67,7 +71,7 @@ void MQTTManager::reconnect() {
         Scheduler::sendScheduleStatus();
         Feeder::sendStatus();
     } else {
-        Serial.printf("failed, rc=%d. Retrying in %lus\n", _client.state(), RECONNECT_INTERVAL_MS / 1000);
+        Serial.printf("failed, rc=%d. Retrying in %lus\n", _client.state(), (unsigned long)(RECONNECT_INTERVAL_MS / 1000));
         _connected = false;
     }
 }

@@ -1,6 +1,7 @@
 #include "ble_manager.h"
 #include "../config.h"
 #include "wifi_manager.h"
+#include "feeder.h"
 
 BLEServer *BLEManager::pServer = nullptr;
 BLECharacteristic *BLEManager::pCharacteristicWiFi = nullptr;
@@ -46,7 +47,12 @@ void BLEManager::init() {
 }
 
 void BLEManager::update() {
-    if (deviceConnected && scanPending) {
+    // WiFi.scanNetworks() blocks for 1-3s -- same failure class as the MQTT
+    // and WiFi-connect blocking bugs fixed earlier: running it unconditionally
+    // here would stall loop() and let a dispense overrun its safety ceiling
+    // (Feeder::update() wouldn't run for the scan's duration). Deferred, not
+    // dropped: scanPending stays true and this retries next loop iteration.
+    if (deviceConnected && scanPending && !Feeder::isDispensing()) {
         scanPending = false;
         String json = WiFiManager::scanNetworksJson();
         pCharacteristicWiFiScan->setValue(json.c_str());

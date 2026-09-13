@@ -108,6 +108,13 @@ void Scheduler::loadSchedules() {
     _preferences.begin("sched_cfg", true);
     if (_preferences.isKey("schedules") && _preferences.getBytesLength("schedules") == sizeof(_schedules)) {
         _preferences.getBytes("schedules", _schedules, sizeof(_schedules));
+        // Length check only proves the blob is the right size, not that its
+        // contents are sane -- clamp the same way parseSchedule() does, in
+        // case flash corruption ever produces an out-of-range value.
+        for (int i = 0; i < 2; i++) {
+            _schedules[i].hour = constrain(_schedules[i].hour, 0, 23);
+            _schedules[i].minute = constrain(_schedules[i].minute, 0, 59);
+        }
     }
     _enabled = _preferences.getBool("enabled", true);
     _preferences.end();

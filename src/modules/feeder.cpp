@@ -90,7 +90,10 @@ void Feeder::publishLastFed() {
     // Retained: a freshly-opened app must see the last feed immediately,
     // not wait for the next one to happen while it's connected.
     StaticJsonDocument<128> doc;
-    doc["fedAt"] = (uint32_t)TimeUtils::getEpoch();
+    // A feed (especially button-triggered) can happen before NTP has synced
+    // -- getEpoch() would otherwise publish a near-zero 1970 timestamp the
+    // app would render as a real date.
+    doc["fedAt"] = TimeUtils::isSynced() ? (uint32_t)TimeUtils::getEpoch() : 0;
     doc["servingSize"] = _servingSize;
     doc["trigger"] = triggerName(_currentTrigger);
     String jsonString;
@@ -99,7 +102,7 @@ void Feeder::publishLastFed() {
 }
 
 void Feeder::setServingSize(uint16_t size) {
-    _servingSize = min((unsigned long)size, (unsigned long)MAX_DISPENSE_DURATION_MS);
+    _servingSize = constrain(size, MIN_DISPENSE_DURATION_MS, MAX_DISPENSE_DURATION_MS);
     Serial.printf("Serving size updated to %d ms\n", _servingSize);
     saveServingSize();
     sendStatus();

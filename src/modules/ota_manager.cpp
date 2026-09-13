@@ -7,6 +7,23 @@
 #include <HTTPUpdate.h>
 #include <WiFiClientSecure.h>
 
+namespace {
+// Parses "major.minor.patch" (missing parts treated as 0) and compares
+// numerically. Returns >0 if a>b, <0 if a<b, 0 if equal. A plain strcmp
+// would treat any differing string as "update" -- including a typo'd
+// version.json or an accidental downgrade.
+int compareVersions(const char* a, const char* b) {
+    int aParts[3] = {0, 0, 0};
+    int bParts[3] = {0, 0, 0};
+    sscanf(a, "%d.%d.%d", &aParts[0], &aParts[1], &aParts[2]);
+    sscanf(b, "%d.%d.%d", &bParts[0], &bParts[1], &bParts[2]);
+    for (int i = 0; i < 3; i++) {
+        if (aParts[i] != bParts[i]) return aParts[i] - bParts[i];
+    }
+    return 0;
+}
+}
+
 void OTAManager::publishStatus(const char* status, const char* detail) {
     StaticJsonDocument<256> doc;
     doc["status"] = status;
@@ -70,8 +87,13 @@ void OTAManager::checkForUpdate() {
         return;
     }
 
-    if (strcmp(latestVersion, FIRMWARE_VERSION) == 0) {
-        Serial.println("OTA: already up to date");
+    int cmp = compareVersions(latestVersion, FIRMWARE_VERSION);
+    if (cmp <= 0) {
+        // Covers both "already up to date" and "version.json points at an
+        // older or malformed version" -- neither should trigger a flash.
+        Serial.printf("OTA: %s (current %s, latest %s)\n",
+                      cmp == 0 ? "already up to date" : "refusing downgrade/invalid version",
+                      FIRMWARE_VERSION, latestVersion);
         publishStatus("up_to_date");
         return;
     }
