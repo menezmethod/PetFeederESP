@@ -2,7 +2,7 @@
 
 #include <Arduino.h>
 #include <PubSubClient.h>
-#include <WiFiClient.h>
+#include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 
 class MQTTManager {
@@ -24,7 +24,8 @@ private:
 
     static void callback(char *topic, byte *payload, unsigned int length);
 
-    static WiFiClient _wifiClient;
+    static WiFiClientSecure _wifiClient;
     static PubSubClient _client;
     static bool _connected;
+    static String _clientId;
 };

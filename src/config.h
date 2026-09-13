@@ -12,8 +12,12 @@
 #define SERVO_STOP 1500
 #define SERVO_MAX 2500
 
-#define MQTT_BROKER_URI "broker.hivemq.com"
-#define MQTT_PORT 1883
+// Self-hosted broker (TLS + auth), replacing the public broker.hivemq.com --
+// anyone could previously publish a feed command to any deployed unit since
+// the topic and broker were both public and unauthenticated.
+#define MQTT_BROKER_URI "47.203.87.233"
+#define MQTT_PORT 8883
+#include "config_secrets.h"  // MQTT_USERNAME / MQTT_PASSWORD -- gitignored, see config_secrets.h.example
 
 #define DEFAULT_SERVING_SIZE 1000
 #define DEFAULT_SCHEDULES {{6, 0, true}, {17, 0, true}}

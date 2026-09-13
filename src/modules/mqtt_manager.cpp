@@ -1,15 +1,26 @@
 #include "mqtt_manager.h"
 #include "../config.h"
+#include "../mqtt_ca_cert.h"
 #include "scheduler.h"
 #include "feeder.h"
 
-WiFiClient MQTTManager::_wifiClient;
+WiFiClientSecure MQTTManager::_wifiClient;
 PubSubClient MQTTManager::_client(MQTTManager::_wifiClient);
 bool MQTTManager::_connected = false;
+String MQTTManager::_clientId = "";
 
 void MQTTManager::init() {
+    _wifiClient.setCACert(MQTT_CA_CERT);
     _client.setServer(MQTT_BROKER_URI, MQTT_PORT);
     _client.setCallback(callback);
+
+    // Unique per chip -- the old fixed "ESP32Feeder" ID meant a second unit
+    // (or a stale reconnect racing a fresh one) would evict the first from
+    // the broker in a reconnect loop.
+    uint64_t mac = ESP.getEfuseMac();
+    char idBuf[24];
+    snprintf(idBuf, sizeof(idBuf), "petfeeder-%04X%08X", (uint16_t)(mac >> 32), (uint32_t)mac);
+    _clientId = String(idBuf);
 }
 
 void MQTTManager::update() {
@@ -48,7 +59,7 @@ void MQTTManager::reconnect() {
     lastAttempt = now;
 
     Serial.print("Attempting MQTT connection...");
-    if (_client.connect("ESP32Feeder")) {
+    if (_client.connect(_clientId.c_str(), MQTT_USERNAME, MQTT_PASSWORD)) {
         Serial.println("connected");
         _connected = true;
         subscribe(MQTT_TOPIC_PREFIX "/#");
