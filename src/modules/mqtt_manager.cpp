@@ -37,24 +37,37 @@ void MQTTManager::disconnect() {
 }
 
 void MQTTManager::reconnect() {
-    while (!_client.connected()) {
-        Serial.print("Attempting MQTT connection...");
-        if (_client.connect("ESP32Feeder")) {
-            Serial.println("connected");
-            _connected = true;
-            subscribe(MQTT_TOPIC_PREFIX "/#");
-            Scheduler::sendScheduleStatus();
-            Feeder::sendStatus();
-            break;
-        } else {
-            Serial.printf("failed, rc=%d. Trying again in 5 seconds\n", _client.state());
-            delay(5000);
-        }
+    // Non-blocking: a blocking retry loop here stalls the whole loop() while a
+    // dispense may be in progress, so Feeder::update() never runs to stop the
+    // servo. One attempt per call, gated by RECONNECT_INTERVAL_MS.
+    static unsigned long lastAttempt = 0;
+    unsigned long now = millis();
+    if (now - lastAttempt < RECONNECT_INTERVAL_MS) {
+        return;
+    }
+    lastAttempt = now;
+
+    Serial.print("Attempting MQTT connection...");
+    if (_client.connect("ESP32Feeder")) {
+        Serial.println("connected");
+        _connected = true;
+        subscribe(MQTT_TOPIC_PREFIX "/#");
+        Scheduler::sendScheduleStatus();
+        Feeder::sendStatus();
+    } else {
+        Serial.printf("failed, rc=%d. Retrying in %lus\n", _client.state(), RECONNECT_INTERVAL_MS / 1000);
+        _connected = false;
     }
 }
 
 void MQTTManager::callback(char* topic, byte* payload, unsigned int length) {
-    String message = String((char*)payload).substring(0, length);
+    // PubSubClient payloads are not null-terminated; build the String from
+    // the given length rather than scanning the buffer for a terminator.
+    String message;
+    message.reserve(length);
+    for (unsigned int i = 0; i < length; i++) {
+        message += (char)payload[i];
+    }
     Serial.printf("Message arrived [%s] %s\n", topic, message.c_str());
 
     if (strcmp(topic, TOPIC_FEED) == 0) {

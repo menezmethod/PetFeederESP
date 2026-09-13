@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <Preferences.h>
 
 class Scheduler {
 public:
@@ -22,6 +23,10 @@ public:
     };
 
 private:
+    static void saveSchedules();
+    static void loadSchedules();
+
     static Schedule _schedules[2];
     static bool _enabled;
+    static Preferences _preferences;
 };

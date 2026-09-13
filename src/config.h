@@ -15,9 +15,6 @@
 #define MQTT_BROKER_URI "broker.hivemq.com"
 #define MQTT_PORT 1883
 
-#define DEEP_SLEEP_DURATION 10 * 60 * 1000000  // 10 minutes in microseconds
-#define LIGHT_SLEEP_DURATION 30 * 1000000  // 30 seconds in microseconds
-
 #define DEFAULT_SERVING_SIZE 1000
 #define DEFAULT_SCHEDULES {{6, 0, true}, {17, 0, true}}
 
@@ -33,3 +30,6 @@
 
 #define MAX_CONNECTION_ATTEMPTS 20
 #define CONNECTION_DELAY_MS 500
+
+#define RECONNECT_INTERVAL_MS 5000
+#define MAX_DISPENSE_DURATION_MS 5000  // hard ceiling regardless of servingSize -- servo must never run longer than this

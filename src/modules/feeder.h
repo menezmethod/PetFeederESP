@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <ESP32Servo.h>
 #include <ArduinoJson.h>
+#include <Preferences.h>
 
 class Feeder {
 public:
@@ -20,9 +21,12 @@ public:
 
 private:
     static void setServo(uint16_t duty);
+    static void saveServingSize();
+    static void loadServingSize();
 
     static Servo _servo;
     static uint16_t _servingSize;
     static bool _dispensing;
     static unsigned long _dispenseStartTime;
+    static Preferences _preferences;
 };

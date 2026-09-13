@@ -6,6 +6,7 @@ Servo Feeder::_servo;
 uint16_t Feeder::_servingSize = DEFAULT_SERVING_SIZE;
 bool Feeder::_dispensing = false;
 unsigned long Feeder::_dispenseStartTime = 0;
+Preferences Feeder::_preferences;
 
 void Feeder::init() {
     pinMode(SERVO_POWER_PIN, OUTPUT);
@@ -17,11 +18,17 @@ void Feeder::init() {
         Serial.println("Servo attached");
     }
     setServo(SERVO_STOP);
+
+    loadServingSize();
 }
 
 void Feeder::update() {
     if (_dispensing) {
-        if (millis() - _dispenseStartTime >= _servingSize) {
+        // Hard ceiling independent of _servingSize/reconnect timing -- the servo
+        // must never be able to run longer than this no matter what upstream
+        // code does (a stalled MQTT reconnect used to block this entirely).
+        unsigned long runDuration = min((unsigned long)_servingSize, (unsigned long)MAX_DISPENSE_DURATION_MS);
+        if (millis() - _dispenseStartTime >= runDuration) {
             setServo(SERVO_STOP);
             delay(100);
             digitalWrite(SERVO_POWER_PIN, LOW);
@@ -43,9 +50,23 @@ void Feeder::dispense() {
 }
 
 void Feeder::setServingSize(uint16_t size) {
-    _servingSize = size;
+    _servingSize = min((unsigned long)size, (unsigned long)MAX_DISPENSE_DURATION_MS);
     Serial.printf("Serving size updated to %d ms\n", _servingSize);
+    saveServingSize();
     sendStatus();
+}
+
+void Feeder::saveServingSize() {
+    _preferences.begin("feeder_cfg", false);
+    _preferences.putUShort("servingSize", _servingSize);
+    _preferences.end();
+}
+
+void Feeder::loadServingSize() {
+    _preferences.begin("feeder_cfg", true);
+    _servingSize = _preferences.getUShort("servingSize", DEFAULT_SERVING_SIZE);
+    _preferences.end();
+    Serial.printf("Loaded serving size: %d ms\n", _servingSize);
 }
 
 void Feeder::sendStatus() {

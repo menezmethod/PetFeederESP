@@ -6,9 +6,11 @@
 
 Scheduler::Schedule Scheduler::_schedules[2] = DEFAULT_SCHEDULES;
 bool Scheduler::_enabled = true;
+Preferences Scheduler::_preferences;
 
 void Scheduler::init() {
     TimeUtils::syncTime();
+    loadSchedules();
 }
 
 void Scheduler::update() {
@@ -50,6 +52,7 @@ void Scheduler::parseSchedule(const String &message) {
     Serial.printf("Schedule updated: %02d:%02d (%s), %02d:%02d (%s)\n",
                   _schedules[0].hour, _schedules[0].minute, _schedules[0].enabled ? "ON" : "OFF",
                   _schedules[1].hour, _schedules[1].minute, _schedules[1].enabled ? "ON" : "OFF");
+    saveSchedules();
 }
 
 void Scheduler::sendScheduleStatus() {
@@ -70,8 +73,29 @@ void Scheduler::sendScheduleStatus() {
 void Scheduler::setEnabled(bool enabled) {
     _enabled = enabled;
     Serial.printf("Global scheduling %s\n", _enabled ? "enabled" : "disabled");
+    saveSchedules();
 }
 
 bool Scheduler::isEnabled() {
     return _enabled;
+}
+
+void Scheduler::saveSchedules() {
+    _preferences.begin("sched_cfg", false);
+    _preferences.putBytes("schedules", _schedules, sizeof(_schedules));
+    _preferences.putBool("enabled", _enabled);
+    _preferences.end();
+}
+
+void Scheduler::loadSchedules() {
+    _preferences.begin("sched_cfg", true);
+    if (_preferences.isKey("schedules") && _preferences.getBytesLength("schedules") == sizeof(_schedules)) {
+        _preferences.getBytes("schedules", _schedules, sizeof(_schedules));
+    }
+    _enabled = _preferences.getBool("enabled", true);
+    _preferences.end();
+    Serial.printf("Loaded schedule: %02d:%02d (%s), %02d:%02d (%s), scheduling %s\n",
+                  _schedules[0].hour, _schedules[0].minute, _schedules[0].enabled ? "ON" : "OFF",
+                  _schedules[1].hour, _schedules[1].minute, _schedules[1].enabled ? "ON" : "OFF",
+                  _enabled ? "enabled" : "disabled");
 }
