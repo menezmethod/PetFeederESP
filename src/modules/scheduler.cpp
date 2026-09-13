@@ -4,7 +4,8 @@
 #include "feeder.h"
 #include "../utils/time_utils.h"
 
-Scheduler::Schedule Scheduler::_schedules[2] = DEFAULT_SCHEDULES;
+Scheduler::Schedule Scheduler::_schedules[MAX_SCHEDULES] = DEFAULT_SCHEDULES;
+int Scheduler::_scheduleCount = DEFAULT_SCHEDULE_COUNT;
 bool Scheduler::_enabled = true;
 Preferences Scheduler::_preferences;
 
@@ -33,8 +34,10 @@ void Scheduler::update() {
         struct tm timeinfo;
         if (TimeUtils::getLocalTime(&timeinfo)) {
             if (_enabled) {
-                for (int i = 0; i < 2; i++) {
+                uint8_t todayMask = 1 << timeinfo.tm_wday;
+                for (int i = 0; i < _scheduleCount; i++) {
                     if (_schedules[i].enabled &&
+                        (_schedules[i].days & todayMask) != 0 &&
                         timeinfo.tm_hour == _schedules[i].hour &&
                         timeinfo.tm_min == _schedules[i].minute &&
                         timeinfo.tm_sec < 10) {
@@ -49,12 +52,16 @@ void Scheduler::update() {
 }
 
 void Scheduler::parseSchedule(const String &message) {
-    StaticJsonDocument<256> doc;
+    StaticJsonDocument<512> doc;
     deserializeJson(doc, message);
 
     JsonArray scheduleArray = doc["schedules"];
 
-    for (int i = 0; i < 2 && i < scheduleArray.size(); i++) {
+    // The app sends its full current list each time (add/remove is just
+    // "send a longer or shorter array"), not an incremental add/remove
+    // command -- one code path handles every case.
+    _scheduleCount = min((size_t)MAX_SCHEDULES, scheduleArray.size());
+    for (int i = 0; i < _scheduleCount; i++) {
         JsonObject scheduleObj = scheduleArray[i];
         int hour = scheduleObj["hour"];
         int minute = scheduleObj["minute"];
@@ -64,23 +71,23 @@ void Scheduler::parseSchedule(const String &message) {
         _schedules[i].hour = constrain(hour, 0, 23);
         _schedules[i].minute = constrain(minute, 0, 59);
         _schedules[i].enabled = scheduleObj["enabled"];
+        _schedules[i].days = scheduleObj["days"] | SCHEDULE_ALL_DAYS;
     }
 
-    Serial.printf("Schedule updated: %02d:%02d (%s), %02d:%02d (%s)\n",
-                  _schedules[0].hour, _schedules[0].minute, _schedules[0].enabled ? "ON" : "OFF",
-                  _schedules[1].hour, _schedules[1].minute, _schedules[1].enabled ? "ON" : "OFF");
+    Serial.printf("Schedule updated: %d slot(s)\n", _scheduleCount);
     saveSchedules();
 }
 
 void Scheduler::sendScheduleStatus() {
-    StaticJsonDocument<256> doc;
+    StaticJsonDocument<512> doc;
     doc["enabled"] = _enabled;
     JsonArray scheduleArray = doc.createNestedArray("schedules");
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < _scheduleCount; i++) {
         JsonObject scheduleObj = scheduleArray.createNestedObject();
         scheduleObj["hour"] = _schedules[i].hour;
         scheduleObj["minute"] = _schedules[i].minute;
         scheduleObj["enabled"] = _schedules[i].enabled;
+        scheduleObj["days"] = _schedules[i].days;
     }
     String jsonString;
     serializeJson(doc, jsonString);
@@ -100,6 +107,7 @@ bool Scheduler::isEnabled() {
 void Scheduler::saveSchedules() {
     _preferences.begin("sched_cfg", false);
     _preferences.putBytes("schedules", _schedules, sizeof(_schedules));
+    _preferences.putInt("count", _scheduleCount);
     _preferences.putBool("enabled", _enabled);
     _preferences.end();
 }
@@ -108,18 +116,16 @@ void Scheduler::loadSchedules() {
     _preferences.begin("sched_cfg", true);
     if (_preferences.isKey("schedules") && _preferences.getBytesLength("schedules") == sizeof(_schedules)) {
         _preferences.getBytes("schedules", _schedules, sizeof(_schedules));
+        _scheduleCount = constrain(_preferences.getInt("count", DEFAULT_SCHEDULE_COUNT), 1, MAX_SCHEDULES);
         // Length check only proves the blob is the right size, not that its
         // contents are sane -- clamp the same way parseSchedule() does, in
         // case flash corruption ever produces an out-of-range value.
-        for (int i = 0; i < 2; i++) {
+        for (int i = 0; i < MAX_SCHEDULES; i++) {
             _schedules[i].hour = constrain(_schedules[i].hour, 0, 23);
             _schedules[i].minute = constrain(_schedules[i].minute, 0, 59);
         }
     }
     _enabled = _preferences.getBool("enabled", true);
     _preferences.end();
-    Serial.printf("Loaded schedule: %02d:%02d (%s), %02d:%02d (%s), scheduling %s\n",
-                  _schedules[0].hour, _schedules[0].minute, _schedules[0].enabled ? "ON" : "OFF",
-                  _schedules[1].hour, _schedules[1].minute, _schedules[1].enabled ? "ON" : "OFF",
-                  _enabled ? "enabled" : "disabled");
+    Serial.printf("Loaded %d schedule slot(s), scheduling %s\n", _scheduleCount, _enabled ? "enabled" : "disabled");
 }

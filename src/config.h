@@ -21,7 +21,13 @@
 #include "config_secrets.h"  // MQTT_USERNAME / MQTT_PASSWORD -- gitignored, see config_secrets.h.example
 
 #define DEFAULT_SERVING_SIZE 1000
-#define DEFAULT_SCHEDULES {{6, 0, true}, {17, 0, true}}
+
+// Days bitmask: bit 0 = Sunday ... bit 6 = Saturday, matching struct tm's
+// tm_wday directly (no reindexing needed at the compare site). 0x7F = every day.
+#define SCHEDULE_ALL_DAYS 0x7F
+#define MAX_SCHEDULES 6
+#define DEFAULT_SCHEDULE_COUNT 2
+#define DEFAULT_SCHEDULES {{6, 0, true, SCHEDULE_ALL_DAYS}, {17, 0, true, SCHEDULE_ALL_DAYS}, {0, 0, false, SCHEDULE_ALL_DAYS}, {0, 0, false, SCHEDULE_ALL_DAYS}, {0, 0, false, SCHEDULE_ALL_DAYS}, {0, 0, false, SCHEDULE_ALL_DAYS}}
 
 #define MQTT_TOPIC_PREFIX "pet_feeder_esp32/v1"
 #define TOPIC_FEED MQTT_TOPIC_PREFIX "/commands/feed"
