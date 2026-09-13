@@ -4,6 +4,33 @@
 #include "scheduler.h"
 #include "feeder.h"
 #include "ota_manager.h"
+#include <mbedtls/x509_crt.h>
+#include <string.h>
+
+namespace {
+// setCACert()'s normal chain-of-trust verification rejects this broker's
+// self-signed cert outright (confirmed on real hardware: correct cert bytes,
+// correct dates, clock correctly NTP-synced -- still fails, the same class of
+// self-signed-root trust issue already hit and fixed on the app side this
+// session). Pinning the exact certificate bytes instead of trusting a chain
+// sidesteps that: setInsecure() skips verification, this checks identity.
+bool certMatchesPinned(const mbedtls_x509_crt* peerCert) {
+    static mbedtls_x509_crt pinnedCert;
+    static bool parsed = false;
+    if (!parsed) {
+        mbedtls_x509_crt_init(&pinnedCert);
+        int ret = mbedtls_x509_crt_parse(&pinnedCert, (const unsigned char*)MQTT_CA_CERT, strlen(MQTT_CA_CERT) + 1);
+        if (ret != 0) {
+            Serial.printf("MQTT: failed to parse pinned CA cert: -0x%04X\n", -ret);
+            return false;
+        }
+        parsed = true;
+    }
+    if (!peerCert) return false;
+    if (peerCert->raw.len != pinnedCert.raw.len) return false;
+    return memcmp(peerCert->raw.p, pinnedCert.raw.p, peerCert->raw.len) == 0;
+}
+}
 
 WiFiClientSecure MQTTManager::_wifiClient;
 PubSubClient MQTTManager::_client(MQTTManager::_wifiClient);
@@ -11,7 +38,7 @@ bool MQTTManager::_connected = false;
 String MQTTManager::_clientId = "";
 
 void MQTTManager::init() {
-    _wifiClient.setCACert(MQTT_CA_CERT);
+    _wifiClient.setInsecure();
     _client.setServer(MQTT_BROKER_URI, MQTT_PORT);
     _client.setCallback(callback);
     // PubSubClient's default 256-byte buffer is tight against our own JSON
@@ -60,6 +87,12 @@ void MQTTManager::reconnect() {
 
     Serial.print("Attempting MQTT connection...");
     if (_client.connect(_clientId.c_str(), MQTT_USERNAME, MQTT_PASSWORD)) {
+        if (!certMatchesPinned(_wifiClient.getPeerCertificate())) {
+            Serial.println("broker certificate does not match pinned cert -- disconnecting");
+            _client.disconnect();
+            _connected = false;
+            return;
+        }
         Serial.println("connected");
         _connected = true;
         subscribe(MQTT_TOPIC_PREFIX "/#");
