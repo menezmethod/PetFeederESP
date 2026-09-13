@@ -60,4 +60,5 @@ void loop() {
     }
 
     Feeder::update();
+    Feeder::pollButton();
 }

@@ -19,9 +19,21 @@ Based on the [FAT PET FEEDER](https://www.youtube.com/watch?v=sCOkuyH7CPo) by
 
 ## Hardware
 
-- ESP32-WROOM-32D
-- Continuous rotation servo (SpringRC SM-S4303R) — signal on GPIO 23, power switched on GPIO 22
-- Momentary button for manual feeding — GPIO 18
+**Electronics (this repo's scope):**
+
+| Part | Notes |
+|---|---|
+| ESP32-WROOM-32D dev board | Any ESP32 dev board with the same pinout works |
+| SpringRC SM-S4303R continuous rotation servo | Signal on GPIO 23 |
+| N-channel MOSFET or small signal relay | Gates power to the servo, driven from GPIO 22 — the ESP32 can't source the servo's current directly, and cutting power when idle avoids jitter |
+| Momentary push button | GPIO 18 to GND — uses the ESP32's internal pull-up, no external resistor needed |
+| 5V power supply, ~1A+ | Sized for the servo's stall current, not just its running current |
+
+**Mechanical (not in this repo):** the hopper, auger/dispensing mechanism, and enclosure
+follow the [FAT PET FEEDER](https://www.youtube.com/watch?v=sCOkuyH7CPo) design this
+project is based on — see that video for the mechanical build. If you've built the
+mechanical side, a PR adding photos or a parts list here would help the next person a lot
+(see `CONTRIBUTING.md`).
 
 ## Firmware setup
 
@@ -59,6 +71,11 @@ Based on the [FAT PET FEEDER](https://www.youtube.com/watch?v=sCOkuyH7CPo) by
 - The OTA download intentionally does not pin GitHub's TLS certificate (`setInsecure()`) — GitHub Releases redirects across hosts with different CA chains, and reaching this code path already requires valid MQTT credentials. See the comment in `ota_manager.cpp` for the full trade-off.
 - BLE provisioning has no pairing/bonding — anyone with physical BLE range while the feeder is advertising can read/write Wi-Fi credentials. Advertising is only active while unprovisioned or briefly after a connection drop, not continuously.
 - Wi-Fi and MQTT credentials are stored in flash (NVS) unencrypted at rest, as ESP32 flash encryption is not enabled. Acceptable for a device that isn't expected to leave your house; if that changes, enable flash encryption and secure boot.
+
+## Contributing
+
+Contributions are welcome — see `CONTRIBUTING.md` for what's most useful right now
+(hardware photos, in particular: none exist in this repo yet).
 
 ## Acknowledgments
 

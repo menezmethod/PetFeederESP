@@ -21,11 +21,12 @@ public:
 
     static bool isDispensing();
 
+    static void pollButton();
+
 private:
     static void setServo(uint16_t duty);
     static void saveServingSize();
     static void loadServingSize();
-    static void pollButton();
     static void publishLastFed();
     static const char* triggerName(FeedTrigger t);
 
