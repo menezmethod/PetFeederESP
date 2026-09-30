@@ -1,6 +1,6 @@
 #pragma once
 
-// Self-signed CA for the self-hosted broker (src/config.h MQTT_BROKER_URI).
+// Self-signed CA for the self-hosted broker (MQTT_BROKER_URI in src/config_secrets.h).
 // This is the certificate's public half -- safe to commit, unlike the
 // private key which stays on the server only.
 static const char MQTT_CA_CERT[] PROGMEM = R"EOF(

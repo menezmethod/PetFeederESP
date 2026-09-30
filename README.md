@@ -38,12 +38,12 @@ mechanical side, a PR adding photos or a parts list here would help the next per
 ## Firmware setup
 
 1. Install [PlatformIO](https://platformio.org/) (CLI or the VSCode extension).
-2. Copy the secrets template and fill in your own broker credentials:
+2. Copy the secrets template and fill in your own broker address and credentials:
    ```bash
    cp src/config_secrets.h.example src/config_secrets.h
    ```
    `config_secrets.h` is gitignored — never commit real credentials.
-3. Point `MQTT_BROKER_URI` / `MQTT_PORT` in `src/config.h` at your own broker, and replace `src/mqtt_ca_cert.h` with your broker's CA certificate (public half only).
+3. Set `MQTT_PORT` in `src/config.h` if your broker does not use 8883, and replace `src/mqtt_ca_cert.h` with your broker's CA certificate (public half only).
 4. Build and flash:
    ```bash
    pio run --target upload
