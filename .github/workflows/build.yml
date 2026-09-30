@@ -1,0 +1,21 @@
+name: Build
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  pio:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ hashFiles('platformio.ini') }}
+      - run: pip install platformio
+      - name: Use the secrets template so the build needs no real credentials
+        run: cp src/config_secrets.h.example src/config_secrets.h
+      - run: pio run
